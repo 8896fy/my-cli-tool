@@ -1,0 +1,41 @@
+name: 漫剧老李 · 创作进度追踪
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'   # 每周一 09:00 (UTC)
+  workflow_dispatch:
+
+jobs:
+  track:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 生成进度汇总
+        run: |
+          FILE=docs/漫剧老李/progress.json
+          if [ ! -f "$FILE" ]; then
+            echo "::error::未找到进度文件 $FILE"
+            exit 1
+          fi
+
+          TOTAL=$(jq '.stages | length' "$FILE")
+
+          {
+            echo "## 📊 漫剧老李 · 创作进度"
+            echo ""
+            echo "| 项目 | 完成度 | 各阶段状态 | 阻塞项 |"
+            echo "| --- | --- | --- | --- |"
+            jq --argjson total "$TOTAL" -r '
+              .projects[] |
+              .name as $n |
+              .status as $s |
+              .blocked as $b |
+              ([$s[] | select(. == "done")] | length) as $done |
+              "| \($n) | \($done)/\($total) | " +
+              ([$s | to_entries[] | "\(.key):\(.value)"] | join("、")) +
+              " | " + ($b | join("、")) + " |"
+            ' "$FILE"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "✅ 进度汇总已生成，见本工作流运行的 Summary。"
